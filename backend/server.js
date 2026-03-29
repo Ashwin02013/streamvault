@@ -1,86 +1,42 @@
-const express = require('express')
-const cors = require('cors')
+// server.js — The main entry point of our Node.js backend
+
+// Load environment variables from .env file
 require('dotenv').config()
 
-// Import routes
-const authRoutes = require('./src/routes/auth')
-const videoRoutes = require('./src/routes/videos')
-const userRoutes = require('./src/routes/users')
+// Import express — our web framework
+const express = require('express')
 
-// Import database connection (runs the connection test on startup)
-const pool = require('./src/config/db')
+// Import cors — allows React frontend to talk to this backend
+const cors = require('cors')
 
-// Import AWS config (runs the S3 connection test on startup)
-require('./src/config/aws')
-
+// Create the express application
 const app = express()
 
-// ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
+// Tell express to accept JSON data in requests
+app.use(express.json())
 
-// CORS — allows our React frontend to talk to this backend
-// Without this, the browser blocks all requests from React to our API
+// Enable CORS so our React app can call this API
 app.use(cors({
-  origin: [
-    'http://localhost:3000',                          // React dev server
-    'http://localhost:3001',                          // alternate dev port
-    `https://${process.env.CLOUDFRONT_URL}`,          // production CloudFront
-    'd2hr465hlafi8g.cloudfront.net'                   // CloudFront domain
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  origin: ['http://localhost:3000', 'https://d2hr465hlafi8g.cloudfront.net', 'http://streamvault-app-281414431600.s3-website.ap-south-1.amazonaws.com'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
 
-// Parse JSON — allows us to read req.body as JSON
-app.use(express.json())
-
-// Parse URL encoded data — for form submissions
-app.use(express.urlencoded({ extended: true }))
-
-// ─── ROUTES ───────────────────────────────────────────────────────────────────
-
-// Health check — used to verify the server is running
-// Visit http://localhost:5000/health to test
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+// Test route — to check if server is running
+// When someone visits http://localhost:5000/ they see this
+app.get('/', (req, res) => {
+  res.json({
     message: 'StreamVault API is running!',
-    timestamp: new Date().toISOString()
+    version: '1.0.0',
+    status: 'healthy'
   })
 })
 
-// Mount all routes with their base paths
-app.use('/api/auth', authRoutes)     // /api/auth/login, /api/auth/register etc
-app.use('/api/videos', videoRoutes)  // /api/videos, /api/videos/:id etc
-app.use('/api/users', userRoutes)    // /api/users/me, /api/users etc
-
-// ─── ERROR HANDLING ───────────────────────────────────────────────────────────
-
-// 404 handler — catches any route that doesn't exist
-app.use((req, res) => {
-  res.status(404).json({ 
-    error: `Route ${req.method} ${req.url} not found` 
-  })
-})
-
-// Global error handler — catches any unhandled errors
-app.use((err, req, res, next) => {
-  console.error('Server error:', err.message)
-  res.status(err.status || 500).json({ 
-    error: err.message || 'Internal server error' 
-  })
-})
-
-// ─── START SERVER ─────────────────────────────────────────────────────────────
-
+// Get the port from .env file (we set PORT=5000)
 const PORT = process.env.PORT || 5000
 
+// Start the server and listen for requests
 app.listen(PORT, () => {
-  console.log('─────────────────────────────────────')
-  console.log(`🚀 StreamVault API running on port ${PORT}`)
-  console.log(`📡 Health check: http://localhost:${PORT}/health`)
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`)
-  console.log('─────────────────────────────────────')
+  console.log(`StreamVault server running on port ${PORT}`)
+  console.log(`Test it: http://localhost:${PORT}`)
 })
-
-module.exports = app

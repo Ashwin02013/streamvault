@@ -7,7 +7,7 @@ import './Auth.css'
 
 const Register = () => {
   const navigate = useNavigate()
-  const [step, setStep] = useState(1) // 1 = register form, 2 = confirm OTP
+  const [step, setStep] = useState(1)
   const [form, setForm] = useState({ username: '', email: '', password: '' })
   const [otp, setOtp] = useState('')
   const [loading, setLoading] = useState(false)
@@ -20,14 +20,12 @@ const Register = () => {
     e.preventDefault()
     setLoading(true)
     try {
-      // Register in Cognito
       await signUp({
         username: form.email,
         password: form.password,
-        options: { userAttributes: { email: form.email, preferred_username: form.username } }
+        options: { userAttributes: { email: form.email, name: form.username } }
       })
 
-      // Save to our database
       await registerUser({ username: form.username, email: form.email })
 
       toast.success('Check your email for the verification code!')
@@ -43,10 +41,8 @@ const Register = () => {
     e.preventDefault()
     setLoading(true)
     try {
-      // Confirm in Cognito
       await confirmSignUp({ username: form.email, confirmationCode: otp })
 
-      // Confirm in our database
       await confirmUser({ email: form.email, code: otp })
 
       toast.success('Account verified! Please sign in.')
