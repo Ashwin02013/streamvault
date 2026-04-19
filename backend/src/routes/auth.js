@@ -4,7 +4,7 @@ const { cognito } = require('../config/aws')
 const pool = require('../config/db')
 require('dotenv').config()
 
-// REGISTER — creates a new user in Cognito + saves to our DB
+// REGISTER
 router.post('/register', async (req, res) => {
   const { username, email, password, phone, plan = 'free' } = req.body
 
@@ -13,10 +13,9 @@ router.post('/register', async (req, res) => {
   }
 
   try {
-    // Step 1 — Create user in Cognito
     const cognitoParams = {
       ClientId: process.env.COGNITO_CLIENT_ID,
-      Username: username,
+      Username: email, // use email as Cognito username (matches what frontend sends)
       Password: password,
       UserAttributes: [
         { Name: 'email', Value: email },
@@ -30,31 +29,31 @@ router.post('/register', async (req, res) => {
 
     await cognito.signUp(cognitoParams).promise()
 
-    // Step 2 — Save user to our PostgreSQL database
     await pool.query(
       `INSERT INTO users (username, email, phone, plan, role, cognito_id)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (email) DO NOTHING`,
-      [username, email, phone || null, plan, 'client', username]
+      [username, email, phone || null, plan, 'client', email]
     )
 
-    res.status(201).json({ 
+    res.status(201).json({
       message: 'Registration successful! Please check your email to verify your account.',
-      username 
+      username
     })
-
   } catch (err) {
     console.error('Register error:', err)
     res.status(400).json({ error: err.message })
   }
 })
 
-// CONFIRM EMAIL — verifies the OTP sent to email after registration
+// CONFIRM EMAIL — accepts email (frontend sends email as username)
 router.post('/confirm', async (req, res) => {
-  const { username, code } = req.body
+  // Frontend sends { email, code } — handle both email and username field names
+  const username = req.body.email || req.body.username
+  const code = req.body.code
 
   if (!username || !code) {
-    return res.status(400).json({ error: 'Username and confirmation code are required' })
+    return res.status(400).json({ error: 'Email and confirmation code are required' })
   }
 
   try {
@@ -65,14 +64,13 @@ router.post('/confirm', async (req, res) => {
     }).promise()
 
     res.json({ message: 'Email confirmed! You can now login.' })
-
   } catch (err) {
     console.error('Confirm error:', err)
     res.status(400).json({ error: err.message })
   }
 })
 
-// LOGIN — authenticates user and returns JWT tokens
+// LOGIN
 router.post('/login', async (req, res) => {
   const { username, password } = req.body
 
@@ -92,7 +90,6 @@ router.post('/login', async (req, res) => {
 
     const tokens = result.AuthenticationResult
 
-    // Get user details from our database
     const userResult = await pool.query(
       'SELECT id, username, email, plan, role FROM users WHERE username = $1 OR email = $1',
       [username]
@@ -107,35 +104,30 @@ router.post('/login', async (req, res) => {
       refreshToken: tokens.RefreshToken,
       user: user || { username, plan: 'free', role: 'client' }
     })
-
   } catch (err) {
     console.error('Login error:', err)
     res.status(401).json({ error: err.message })
   }
 })
 
-// FORGOT PASSWORD — sends reset code to email
+// FORGOT PASSWORD
 router.post('/forgot-password', async (req, res) => {
   const { username } = req.body
-
   try {
     await cognito.forgotPassword({
       ClientId: process.env.COGNITO_CLIENT_ID,
       Username: username
     }).promise()
-
     res.json({ message: 'Password reset code sent to your email.' })
-
   } catch (err) {
     console.error('Forgot password error:', err)
     res.status(400).json({ error: err.message })
   }
 })
 
-// RESET PASSWORD — sets new password using the code from email
+// RESET PASSWORD
 router.post('/reset-password', async (req, res) => {
   const { username, code, newPassword } = req.body
-
   try {
     await cognito.confirmForgotPassword({
       ClientId: process.env.COGNITO_CLIENT_ID,
@@ -143,9 +135,7 @@ router.post('/reset-password', async (req, res) => {
       ConfirmationCode: code,
       Password: newPassword
     }).promise()
-
     res.json({ message: 'Password reset successful! You can now login.' })
-
   } catch (err) {
     console.error('Reset password error:', err)
     res.status(400).json({ error: err.message })
