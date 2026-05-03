@@ -7,22 +7,6 @@ A full-stack video streaming platform built with React, Node.js, AWS, and Razorp
 
 ---
 
-## 📸 Screenshots
-
->Landing page
-<img width="1895" height="856" alt="image" src="https://github.com/user-attachments/assets/4a276800-438c-4493-8686-f6eba458c69c" />
-
->Home page
-<img width="1897" height="844" alt="image" src="https://github.com/user-attachments/assets/55e7f6be-bfe7-4e65-9cd5-966cd4b6b1f7" />
-
->Video player
-<img width="1889" height="860" alt="image" src="https://github.com/user-attachments/assets/8156c344-13bb-45a0-bc8e-6702f75bf3f4" />
-
->Admin dashboard
-
-
----
-
 ## 🚀 Features
 
 ### User Features
