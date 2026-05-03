@@ -8,11 +8,12 @@ import './Home.css'
 
 const Home = () => {
   const navigate = useNavigate()
-  const { user, logout, isAdmin, getPlan } = useAuth()
+  const { logout, isAdmin, getPlan } = useAuth()
   const [videos, setVideos] = useState([])
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
     fetchVideos()
@@ -56,9 +57,7 @@ const Home = () => {
     try {
       const res = await getWatchHistory()
       setHistory(res.data.history || [])
-    } catch (err) {
-      // silently fail — history is optional
-    }
+    } catch (err) {}
   }
 
   const handleLogout = async () => {
@@ -77,7 +76,13 @@ const Home = () => {
     <div className="home">
       {/* Navbar */}
       <nav className="home-nav">
-        <div className="logo">🎬 StreamVault</div>
+        <div className="nav-top-row">
+          <div className="logo">🎬 StreamVault</div>
+          <button className="hamburger" onClick={() => setMenuOpen(!menuOpen)}>
+            {menuOpen ? '✕' : '☰'}
+          </button>
+        </div>
+
         <div className="nav-search">
           <input
             type="text"
@@ -86,17 +91,18 @@ const Home = () => {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="nav-right">
+
+        <div className={`nav-right ${menuOpen ? 'open' : ''}`}>
           {isAdmin() && (
-            <button onClick={() => navigate('/admin')} className="btn-admin">
+            <button onClick={() => { navigate('/admin'); setMenuOpen(false) }} className="btn-admin">
               Admin
             </button>
           )}
           <span className={`plan-badge plan-${plan}`}>{plan.toUpperCase()}</span>
-          <button onClick={() => navigate('/plans')} className="btn-upgrade">
+          <button onClick={() => { navigate('/plans'); setMenuOpen(false) }} className="btn-upgrade">
             {plan === 'free' ? 'Upgrade' : 'Plans'}
           </button>
-          <button onClick={() => navigate('/profile')} className="btn-logout">
+          <button onClick={() => { navigate('/profile'); setMenuOpen(false) }} className="btn-logout">
             Profile
           </button>
           <button onClick={handleLogout} className="btn-logout">Logout</button>
@@ -136,7 +142,6 @@ const Home = () => {
           {search ? `Results for "${search}"` : 'All Videos'}
           <span className="video-count">{filteredVideos.length} videos</span>
         </h2>
-
         {loading ? (
           <div className="videos-loading">
             {[1,2,3,4,5,6].map(i => (
@@ -165,7 +170,6 @@ const Home = () => {
   )
 }
 
-// Video Card Component
 const VideoCard = ({ video, userPlan, onClick, showWatchedTime }) => {
   const tierLevel = { free: 0, basic: 1, premium: 2 }
   const canWatch = tierLevel[userPlan] >= tierLevel[video.required_plan || 'free']
@@ -196,10 +200,16 @@ const VideoCard = ({ video, userPlan, onClick, showWatchedTime }) => {
         )}
         <div className="video-duration">{video.duration || '--:--'}</div>
       </div>
-      <div className="video-info">
+      <div className="video-info" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
         <h3>{video.title}</h3>
-        <p>{video.description?.substring(0, 80)}...</p>
-        <div className="video-meta">
+        <p style={{
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+          minHeight: '2.8em'
+        }}>{video.description || ''}</p>
+        <div className="video-meta" style={{ marginTop: 'auto' }}>
           <span className={`tier-badge tier-${video.required_plan || 'free'}`}>
             {video.required_plan?.toUpperCase() || 'FREE'}
           </span>
