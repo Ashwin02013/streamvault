@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import API from '../services/api'
 import toast from 'react-hot-toast'
 import './Plans.css'
 
@@ -8,9 +9,45 @@ const Plans = () => {
   const navigate = useNavigate()
   const { getPlan } = useAuth()
   const currentPlan = getPlan()
+  const [loading, setLoading] = useState(null)
 
-  const handleUpgrade = (plan) => {
-    toast('Payment integration coming soon! Contact admin to upgrade.', { icon: '💳' })
+  const handleUpgrade = async (plan) => {
+    if (plan === 'free') return
+    setLoading(plan)
+    try {
+      const { data } = await API.post('/payments/create-order', { plan })
+      const options = {
+        key: data.key,
+        amount: data.order.amount,
+        currency: data.order.currency,
+        name: 'StreamVault',
+        description: data.planName,
+        order_id: data.order.id,
+        handler: async (response) => {
+          try {
+            await API.post('/payments/verify', {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              plan
+            })
+            toast.success(`Successfully upgraded to ${plan} plan!`)
+            navigate('/home')
+            window.location.reload()
+          } catch (err) {
+            toast.error('Payment verification failed.')
+          }
+        },
+        prefill: { name: '', email: '' },
+        theme: { color: '#e50914' }
+      }
+      const rzp = new window.Razorpay(options)
+      rzp.open()
+    } catch (err) {
+      toast.error('Failed to initiate payment.')
+    } finally {
+      setLoading(null)
+    }
   }
 
   const plans = [
@@ -99,9 +136,9 @@ const Plans = () => {
             <button
               className={`plan-btn plan-btn-${plan.color}`}
               onClick={() => handleUpgrade(plan.id)}
-              disabled={currentPlan === plan.id}
+              disabled={currentPlan === plan.id || loading === plan.id}
             >
-              {currentPlan === plan.id ? 'Current Plan' : currentPlan === 'free' ? 'Upgrade' : 'Switch Plan'}
+              {loading === plan.id ? 'Processing...' : currentPlan === plan.id ? 'Current Plan' : currentPlan === 'free' ? 'Upgrade' : 'Switch Plan'}
             </button>
           </div>
         ))}

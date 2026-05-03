@@ -15,7 +15,7 @@ router.post('/register', async (req, res) => {
   try {
     const cognitoParams = {
       ClientId: process.env.COGNITO_CLIENT_ID,
-      Username: email, // use email as Cognito username (matches what frontend sends)
+      Username: username,
       Password: password,
       UserAttributes: [
         { Name: 'email', Value: email },
@@ -33,7 +33,7 @@ router.post('/register', async (req, res) => {
       `INSERT INTO users (username, email, phone, plan, role, cognito_id)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (email) DO NOTHING`,
-      [username, email, phone || null, plan, 'client', email]
+      [username, email, phone || null, plan, 'client', username]
     )
 
     res.status(201).json({
@@ -46,14 +46,13 @@ router.post('/register', async (req, res) => {
   }
 })
 
-// CONFIRM EMAIL — accepts email (frontend sends email as username)
+// CONFIRM EMAIL
 router.post('/confirm', async (req, res) => {
-  // Frontend sends { email, code } — handle both email and username field names
-  const username = req.body.email || req.body.username
+  const username = req.body.username || req.body.email
   const code = req.body.code
 
   if (!username || !code) {
-    return res.status(400).json({ error: 'Email and confirmation code are required' })
+    return res.status(400).json({ error: 'Username and confirmation code are required' })
   }
 
   try {
@@ -66,6 +65,21 @@ router.post('/confirm', async (req, res) => {
     res.json({ message: 'Email confirmed! You can now login.' })
   } catch (err) {
     console.error('Confirm error:', err)
+    res.status(400).json({ error: err.message })
+  }
+})
+
+// RESEND CONFIRMATION CODE
+router.post('/resend-code', async (req, res) => {
+  const { username } = req.body
+  try {
+    await cognito.resendConfirmationCode({
+      ClientId: process.env.COGNITO_CLIENT_ID,
+      Username: username
+    }).promise()
+    res.json({ message: 'Code resent!' })
+  } catch (err) {
+    console.error('Resend code error:', err)
     res.status(400).json({ error: err.message })
   }
 })
@@ -87,6 +101,10 @@ router.post('/login', async (req, res) => {
         PASSWORD: password
       }
     }).promise()
+
+    if (result.ChallengeName === 'NEW_PASSWORD_REQUIRED') {
+      return res.status(400).json({ error: 'Password reset required. Please contact admin.' })
+    }
 
     const tokens = result.AuthenticationResult
 
@@ -139,6 +157,25 @@ router.post('/reset-password', async (req, res) => {
   } catch (err) {
     console.error('Reset password error:', err)
     res.status(400).json({ error: err.message })
+  }
+})
+
+// FORGOT ACCOUNT — find username by email
+router.post('/forgot-account', async (req, res) => {
+  const { email } = req.body
+  if (!email) return res.status(400).json({ error: 'Email is required' })
+  try {
+    const result = await pool.query(
+      'SELECT username FROM users WHERE email = $1',
+      [email]
+    )
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No account found with this email.' })
+    }
+    res.json({ username: result.rows[0].username })
+  } catch (err) {
+    console.error('Forgot account error:', err)
+    res.status(500).json({ error: 'Failed to find account.' })
   }
 })
 

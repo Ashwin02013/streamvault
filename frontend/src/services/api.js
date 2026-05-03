@@ -4,7 +4,10 @@ import axios from 'axios'
 
 // Base URL for our backend
 const API = axios.create({
-  baseURL: 'http://13.233.186.76:5000/api'
+  baseURL: 'https://deed-spotter-unsteady.ngrok-free.dev/api',
+  headers: {
+    'ngrok-skip-browser-warning': 'true'
+  }
 })
 
 // Automatically attach the JWT token to every request
@@ -22,6 +25,8 @@ export const confirmUser = (data) => API.post('/auth/confirm', data)
 export const loginUser = (data) => API.post('/auth/login', data)
 export const forgotPassword = (data) => API.post('/auth/forgot-password', data)
 export const resetPassword = (data) => API.post('/auth/reset-password', data)
+export const forgotAccount = (data) => API.post('/auth/forgot-account', data)
+export const refreshToken = (data) => API.post('/auth/refresh', data)
 
 // ─── VIDEOS ─────────────────────────────────────────────
 export const browseVideos = () => API.get('/videos/browse')

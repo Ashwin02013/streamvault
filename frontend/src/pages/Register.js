@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { signUp, confirmSignUp, resendSignUpCode } from 'aws-amplify/auth'
 import { registerUser, confirmUser } from '../services/api'
 import toast from 'react-hot-toast'
 import './Auth.css'
@@ -20,14 +19,7 @@ const Register = () => {
     e.preventDefault()
     setLoading(true)
     try {
-      await signUp({
-        username: form.email,
-        password: form.password,
-        options: { userAttributes: { email: form.email, name: form.username } }
-      })
-
-      await registerUser({ username: form.username, email: form.email })
-
+      await registerUser({ username: form.username, email: form.email, password: form.password })
       toast.success('Check your email for the verification code!')
       setStep(2)
     } catch (err) {
@@ -41,16 +33,26 @@ const Register = () => {
     e.preventDefault()
     setLoading(true)
     try {
-      await confirmSignUp({ username: form.email, confirmationCode: otp })
-
-      await confirmUser({ email: form.email, code: otp })
-
+      await confirmUser({ username: form.username, code: otp })
       toast.success('Account verified! Please sign in.')
       navigate('/login')
     } catch (err) {
       toast.error(err.message || 'Verification failed.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleResend = async () => {
+    try {
+      await fetch(`https://teach-confident-implementation-wellness.trycloudflare.com/api/auth/resend-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: form.username })
+      })
+      toast.success('Code resent!')
+    } catch (err) {
+      toast.error('Failed to resend code.')
     }
   }
 
@@ -134,7 +136,7 @@ const Register = () => {
                 type="button"
                 className="btn-outline btn-full"
                 style={{ marginTop: '10px' }}
-                onClick={() => resendSignUpCode({ username: form.email }).then(() => toast.success('Code resent!'))}
+                onClick={handleResend}
               >
                 Resend Code
               </button>

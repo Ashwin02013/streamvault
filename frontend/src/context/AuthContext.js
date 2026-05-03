@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
-import { signIn, signOut, getCurrentUser, fetchAuthSession } from 'aws-amplify/auth'
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
+import { refreshToken } from '../services/api'
 
 const AuthContext = createContext()
 
@@ -7,77 +7,111 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(null)
   const [loading, setLoading] = useState(true)
+  const refreshIntervalRef = useRef(null)
 
   useEffect(() => {
     checkUser()
-  }, [])
-
-  const getToken = async () => {
-    try {
-      const session = await fetchAuthSession({ forceRefresh: false })
-      // Amplify v6 stores tokens here
-      const idToken = session?.tokens?.idToken?.toString()
-      return idToken || null
-    } catch (err) {
-      console.error('getToken error:', err)
-      return null
+    return () => {
+      if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current)
     }
-  }
+  }, [])
 
   const checkUser = async () => {
     try {
-      const currentUser = await getCurrentUser()
-      const idToken = await getToken()
-      console.log('checkUser - token:', idToken ? 'found' : 'not found')
-      
-      if (idToken) {
-        setUser(currentUser)
-        setToken(idToken)
-        localStorage.setItem('token', idToken)
+      const storedToken = localStorage.getItem('token')
+      const storedUser = localStorage.getItem('user')
+      const storedRefresh = localStorage.getItem('refreshToken')
+
+      if (!storedToken || storedToken === 'undefined') {
+        clearAuth()
+        return
+      }
+
+      // Check if token is expired
+      const payload = JSON.parse(atob(storedToken.split('.')[1]))
+      const isExpired = payload.exp * 1000 < Date.now()
+
+      if (!isExpired) {
+        // Token still valid — use it directly
+        setToken(storedToken)
+        setUser(storedUser ? JSON.parse(storedUser) : {})
+        startRefreshTimer()
+      } else if (storedRefresh) {
+        // Token expired — try to refresh
+        try {
+          const { data } = await refreshToken({ refreshToken: storedRefresh })
+          localStorage.setItem('token', data.idToken)
+          setToken(data.idToken)
+          setUser(storedUser ? JSON.parse(storedUser) : {})
+          startRefreshTimer()
+        } catch (err) {
+          if (err.response?.status === 401) {
+            // Cognito explicitly rejected — session truly expired
+            clearAuth()
+          } else {
+            // Network error or server down — keep user logged in with old token
+            console.log('Network error during refresh — keeping session alive')
+            setToken(storedToken)
+            setUser(storedUser ? JSON.parse(storedUser) : {})
+            startRefreshTimer()
+          }
+        }
       } else {
         clearAuth()
       }
     } catch (err) {
-      console.log('Not logged in:', err.message)
-      clearAuth()
+      // Any unexpected error — keep logged in if token exists
+      const storedToken = localStorage.getItem('token')
+      const storedUser = localStorage.getItem('user')
+      if (storedToken) {
+        setToken(storedToken)
+        setUser(storedUser ? JSON.parse(storedUser) : {})
+      } else {
+        clearAuth()
+      }
     } finally {
       setLoading(false)
     }
+  }
+
+  const startRefreshTimer = () => {
+    if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current)
+    refreshIntervalRef.current = setInterval(async () => {
+      const storedRefresh = localStorage.getItem('refreshToken')
+      if (!storedRefresh) return
+      try {
+        const { data } = await refreshToken({ refreshToken: storedRefresh })
+        localStorage.setItem('token', data.idToken)
+        setToken(data.idToken)
+        console.log('Token refreshed successfully')
+      } catch (err) {
+        if (err.response?.status === 401) {
+          // Only log out if Cognito explicitly rejects
+          console.log('Refresh token expired — logging out')
+          clearAuth()
+          window.location.href = '/login'
+        }
+        // Network error — silently skip, try again next interval
+      }
+    }, 45 * 60 * 1000)
   }
 
   const clearAuth = () => {
     setUser(null)
     setToken(null)
     localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    localStorage.removeItem('refreshToken')
+    if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current)
   }
 
-  const login = async (email, password) => {
-    try {
-      const result = await signIn({ username: email, password })
-      console.log('signIn result:', result)
-
-      // Wait for session
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      const idToken = await getToken()
-      console.log('login - token:', idToken ? 'found' : 'not found')
-
-      if (idToken) {
-        setUser({ username: email })
-        setToken(idToken)
-        localStorage.setItem('token', idToken)
-      }
-
-      return result
-    } catch (err) {
-      console.error('Login error:', err)
-      throw err
-    }
+  const login = async (username, password) => {
+    // Login is handled directly in Login.js
   }
 
-  const logout = async () => {
-    await signOut()
+  const logout = () => {
     clearAuth()
+    window.location.href = '/login'
   }
 
   const getUserGroups = () => {

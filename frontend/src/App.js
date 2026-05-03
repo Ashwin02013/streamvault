@@ -12,6 +12,7 @@ import VideoPlayer from './pages/VideoPlayer'
 import Plans from './pages/Plans'
 import AdminDashboard from './pages/AdminDashboard'
 import UploadVideo from './pages/UploadVideo'
+import Profile from './pages/Profile'
 
 // Protected route — redirects to login if not logged in
 const PrivateRoute = ({ children }) => {
@@ -43,6 +44,7 @@ function App() {
         <Route path="/home" element={<PrivateRoute><Home /></PrivateRoute>} />
         <Route path="/watch/:id" element={<PrivateRoute><VideoPlayer /></PrivateRoute>} />
         <Route path="/plans" element={<PrivateRoute><Plans /></PrivateRoute>} />
+        <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
 
         {/* Admin routes */}
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />

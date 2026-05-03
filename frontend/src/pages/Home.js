@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { browseVideos } from '../services/api'
+import { browseVideos, getWatchHistory } from '../services/api'
+import API from '../services/api'
 import toast from 'react-hot-toast'
 import './Home.css'
 
@@ -9,21 +10,54 @@ const Home = () => {
   const navigate = useNavigate()
   const { user, logout, isAdmin, getPlan } = useAuth()
   const [videos, setVideos] = useState([])
+  const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
     fetchVideos()
+    fetchHistory()
   }, [])
+
+  const detectDurations = (videosList) => {
+    videosList.forEach(video => {
+      if ((!video.duration || video.duration === '00:00') && video.video_url) {
+        const vid = document.createElement('video')
+        vid.src = video.video_url
+        vid.onloadedmetadata = async () => {
+          const mins = Math.floor(vid.duration / 60)
+          const secs = Math.floor(vid.duration % 60)
+          const durationStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+          try {
+            await API.put(`/videos/${video.id}/duration`, { duration: durationStr })
+            setVideos(prev => prev.map(v =>
+              v.id === video.id ? { ...v, duration: durationStr } : v
+            ))
+          } catch (err) {}
+        }
+      }
+    })
+  }
 
   const fetchVideos = async () => {
     try {
       const res = await browseVideos()
-      setVideos(res.data.videos || [])
+      const videosList = res.data.videos || []
+      setVideos(videosList)
+      detectDurations(videosList)
     } catch (err) {
       toast.error('Failed to load videos')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchHistory = async () => {
+    try {
+      const res = await getWatchHistory()
+      setHistory(res.data.history || [])
+    } catch (err) {
+      // silently fail — history is optional
     }
   }
 
@@ -62,6 +96,9 @@ const Home = () => {
           <button onClick={() => navigate('/plans')} className="btn-upgrade">
             {plan === 'free' ? 'Upgrade' : 'Plans'}
           </button>
+          <button onClick={() => navigate('/profile')} className="btn-logout">
+            Profile
+          </button>
           <button onClick={handleLogout} className="btn-logout">Logout</button>
         </div>
       </nav>
@@ -71,6 +108,27 @@ const Home = () => {
         <h1>Welcome back! 👋</h1>
         <p>Continue watching or discover something new</p>
       </div>
+
+      {/* Watch History Section */}
+      {!search && history.length > 0 && (
+        <div className="videos-section">
+          <h2>
+            Continue Watching
+            <span className="video-count">{history.length} videos</span>
+          </h2>
+          <div className="videos-grid">
+            {history.map(video => (
+              <VideoCard
+                key={video.id}
+                video={video}
+                userPlan={plan}
+                onClick={() => navigate(`/watch/${video.id}`)}
+                showWatchedTime={true}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Videos Grid */}
       <div className="videos-section">
@@ -108,9 +166,19 @@ const Home = () => {
 }
 
 // Video Card Component
-const VideoCard = ({ video, userPlan, onClick }) => {
+const VideoCard = ({ video, userPlan, onClick, showWatchedTime }) => {
   const tierLevel = { free: 0, basic: 1, premium: 2 }
   const canWatch = tierLevel[userPlan] >= tierLevel[video.required_plan || 'free']
+
+  const formatWatchedTime = (dateStr) => {
+    if (!dateStr) return ''
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diff = Math.floor((now - date) / 1000 / 60)
+    if (diff < 60) return `${diff}m ago`
+    if (diff < 1440) return `${Math.floor(diff / 60)}h ago`
+    return `${Math.floor(diff / 1440)}d ago`
+  }
 
   return (
     <div className={`video-card ${!canWatch ? 'locked' : ''}`} onClick={onClick}>
@@ -126,7 +194,7 @@ const VideoCard = ({ video, userPlan, onClick }) => {
             <p>{video.required_plan?.toUpperCase()}</p>
           </div>
         )}
-        <div className="video-duration">{video.duration || '00:00'}</div>
+        <div className="video-duration">{video.duration || '--:--'}</div>
       </div>
       <div className="video-info">
         <h3>{video.title}</h3>
@@ -135,7 +203,11 @@ const VideoCard = ({ video, userPlan, onClick }) => {
           <span className={`tier-badge tier-${video.required_plan || 'free'}`}>
             {video.required_plan?.toUpperCase() || 'FREE'}
           </span>
-          <span className="video-views">{video.views || 0} views</span>
+          {showWatchedTime && video.watched_at ? (
+            <span className="video-views">Watched {formatWatchedTime(video.watched_at)}</span>
+          ) : (
+            <span className="video-views">{video.views || 0} views</span>
+          )}
         </div>
       </div>
     </div>
